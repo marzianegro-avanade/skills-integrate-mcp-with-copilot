@@ -3,6 +3,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const loginButton = document.getElementById("teacher-login-button");
+  const loginContainer = document.getElementById("login-container");
+  const loginForm = document.getElementById("login-form");
+  const loginMessage = document.getElementById("login-message");
+  const teacherContainer = document.getElementById("teacher-container");
+  const teacherStatus = document.getElementById("teacher-status");
+  const logoutButton = document.getElementById("teacher-logout-button");
+  let teacherToken = sessionStorage.getItem("teacherToken");
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -30,7 +38,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.participants
                   .map(
                     (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="participant-email">${email}</span>${
+                        teacherToken
+                          ? `<button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button>`
+                          : ""
+                      }</li>`
                   )
                   .join("")}
               </ul>
@@ -80,6 +92,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/unregister?email=${encodeURIComponent(email)}`,
         {
           method: "DELETE",
+          headers: { Authorization: `Bearer ${teacherToken}` },
         }
       );
 
@@ -124,6 +137,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/signup?email=${encodeURIComponent(email)}`,
         {
           method: "POST",
+          headers: { Authorization: `Bearer ${teacherToken}` },
         }
       );
 
@@ -154,6 +168,57 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Error signing up:", error);
     }
   });
+
+  function showTeacherTools(username) {
+    teacherContainer.classList.remove("hidden");
+    loginContainer.classList.add("hidden");
+    loginButton.classList.add("hidden");
+    teacherStatus.textContent = `Logged in as ${username}. Only teachers can change registrations.`;
+  }
+
+  loginButton.addEventListener("click", () => {
+    loginContainer.classList.toggle("hidden");
+  });
+
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const response = await fetch("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: document.getElementById("username").value,
+        password: document.getElementById("password").value,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      loginMessage.textContent = result.detail || "Login failed";
+      loginMessage.className = "error";
+      loginMessage.classList.remove("hidden");
+      return;
+    }
+    teacherToken = result.token;
+    sessionStorage.setItem("teacherToken", teacherToken);
+    loginForm.reset();
+    showTeacherTools(result.username);
+    fetchActivities();
+  });
+
+  logoutButton.addEventListener("click", async () => {
+    await fetch("/auth/logout", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${teacherToken}` },
+    });
+    teacherToken = null;
+    sessionStorage.removeItem("teacherToken");
+    teacherContainer.classList.add("hidden");
+    loginButton.classList.remove("hidden");
+    fetchActivities();
+  });
+
+  if (teacherToken) {
+    showTeacherTools("teacher");
+  }
 
   // Initialize app
   fetchActivities();
